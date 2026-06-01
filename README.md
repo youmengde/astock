@@ -1,25 +1,35 @@
 # astock
 
-A-share stock terminal toolkit — real-time quotes, screening & ranking from the command line.
+A-share stock terminal toolkit — real-time quotes, screening, ranking, and script-friendly JSON/CSV output.
 
 <p align="center">
-  <img src="https://img.shields.io/pypi/v/astock" />
-  <img src="https://img.shields.io/pypi/pyversions/astock" />
   <img src="https://img.shields.io/github/license/youmengde/astock" />
+  <img src="https://img.shields.io/github/actions/workflow/status/youmengde/astock/ci.yml?branch=master" />
 </p>
 
 ## Features
 
-- **Real-time quotes** — fetch live A-share stock data from the terminal
-- **Stock screening** — filter by PE, PB, turnover, market cap, and more
-- **Ranking** — top gainers, lowest PE, highest turnover, etc.
-- **Index overview** — SSE, SZSE, ChiNext at a glance
-- **Beautiful output** — Rich-powered terminal tables with color-coded changes
+- Real-time A-share quotes from the terminal
+- Stock screening by PE, PB, turnover, price change, and market cap
+- Rankings for gainers, turnover, PE/PB, volume, and market cap
+- Major China index overview
+- Rich terminal tables plus JSON/CSV output for scripts
+- No data API key required
 
 ## Install
 
+This project is not published to PyPI yet. Install from source:
+
 ```bash
-pip install astock
+git clone https://github.com/youmengde/astock.git
+cd astock
+python3 -m pip install -e .
+```
+
+For development:
+
+```bash
+python3 -m pip install -e ".[dev]"
 ```
 
 ## Usage
@@ -28,12 +38,14 @@ pip install astock
 
 ```bash
 astock quote 000001
+astock quote 000001 --format json
 ```
 
 ### View major indices
 
 ```bash
 astock index
+astock index --format csv
 ```
 
 ### Screen stocks
@@ -42,8 +54,8 @@ astock index
 # Low PE, high turnover
 astock screen --max-pe 30 --min-turnover 3 -n 10
 
-# Positive change, reasonable PB
-astock screen --min-change 0 --max-pb 5 -n 15
+# Save results as CSV
+astock screen --max-pe 30 --min-turnover 3 --format csv --output stocks.csv
 ```
 
 ### Rankings
@@ -52,41 +64,41 @@ astock screen --min-change 0 --max-pb 5 -n 15
 # Top gainers
 astock top change_pct
 
-# Lowest PE (ascending)
+# Lowest PE
 astock top pe --asc -n 10
 
-# Largest market cap
-astock top total_mv
-
-# Most active
-astock top amount -n 15
+# Largest market cap as JSON
+astock top total_mv --format json
 ```
 
-## Screenshots
+## Output formats
 
-```
-$ astock top change_pct -n 5
+All data commands support:
 
-          涨跌幅排行 (降序)
-┌────┬──────┬──────────┬────────┬────────┬────────┐
-│ #  │ 代码 │ 名称     │ 最新价 │ 涨跌%  │ 换手率 │
-├────┼──────┼──────────┼────────┼────────┼────────┤
-│ 1  │ 301… │ 新股     │  45.20 │ 20.00% │ 55.32% │
-│ 2  │ 688… │ 科创股   │  32.10 │ 19.98% │ 42.15% │
-└────┴──────┴──────────┴────────┴────────┴────────┘
+```bash
+--format table  # default
+--format json
+--format csv
+--output FILE   # json/csv only
 ```
 
 ## Data Source
 
-Stock data is provided by [AKShare](https://github.com/akfamily/akshare) via East Money (东方财富). No API key required.
+Stock data is provided by [AKShare](https://github.com/akfamily/akshare) via public market data sources such as East Money (东方财富). Availability depends on the upstream data provider and network connectivity.
+
+## Disclaimer
+
+This tool is for information and research only. It is not financial advice. Market data may be delayed, incomplete, or unavailable. Verify data before making investment decisions.
 
 ## Development
 
 ```bash
-git clone https://github.com/youmengde/astock.git
-cd astock
-pip install -e ".[dev]"
+python3 -m pip install -e ".[dev]"
+python3 -m ruff check src tests
+python3 -m pytest
 ```
+
+Tests mock the data provider and do not depend on real market data.
 
 ## License
 

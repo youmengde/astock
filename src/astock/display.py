@@ -31,31 +31,37 @@ DISPLAY_COLUMNS = {
 DEFAULT_COLUMNS = ["code", "name", "price", "change_pct", "turnover", "pe", "pb", "total_mv"]
 
 
+def _to_float(val) -> float | None:
+    if pd.isna(val):
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
 def _fmt_val(col: str, val) -> str:
     """Format a cell value for display."""
-    if pd.isna(val):
-        return "-"
+    v = _to_float(val)
+    if v is None:
+        return "-" if pd.isna(val) else str(val)
     if col in ("change_pct", "turnover", "amplitude"):
-        return f"{float(val):.2f}%"
+        return f"{v:.2f}%"
     if col in ("price", "change", "high", "low", "open", "pre_close"):
-        return f"{float(val):.2f}"
+        return f"{v:.2f}"
     if col in ("pe", "pb"):
-        v = float(val)
         return f"{v:.1f}" if v > 0 else "-"
     if col in ("total_mv", "circ_mv"):
-        v = float(val)
         if v >= 1e12:
             return f"{v / 1e12:.1f}万亿"
         if v >= 1e8:
             return f"{v / 1e8:.1f}亿"
         return f"{v:.0f}"
     if col in ("amount",):
-        v = float(val)
         if v >= 1e8:
             return f"{v / 1e8:.1f}亿"
         return f"{v:.0f}万"
     if col in ("volume",):
-        v = float(val)
         if v >= 1e8:
             return f"{v / 1e8:.1f}亿"
         if v >= 1e4:
@@ -66,14 +72,18 @@ def _fmt_val(col: str, val) -> str:
 
 def _change_style(val) -> str:
     """Return rich style based on change value."""
-    if pd.isna(val):
+    v = _to_float(val)
+    if v is None:
         return ""
-    v = float(val)
     if v > 0:
         return "bold red"
     if v < 0:
         return "bold green"
     return ""
+
+
+def _style_text(text: str, style: str) -> str:
+    return f"[{style}]{text}[/{style}]" if style else text
 
 
 def show_table(df: pd.DataFrame, title: str = "", columns: list[str] | None = None):
@@ -96,8 +106,7 @@ def show_table(df: pd.DataFrame, title: str = "", columns: list[str] | None = No
             val = row.get(col)
             text = _fmt_val(col, val)
             if col == "change_pct":
-                style = _change_style(val)
-                text = f"[{style}]{text}[/{style}]" if style else text
+                text = _style_text(text, _change_style(val))
             values.append(text)
         table.add_row(str(i), *values)
 
@@ -111,10 +120,11 @@ def show_quote(code: str, df: pd.DataFrame):
         return
     row = df.iloc[0]
     console.print()
-    change_pct = row.get("change_pct", 0)
-    style = "bold red" if float(change_pct or 0) > 0 else "bold green" if float(change_pct or 0) < 0 else ""
+    style = _change_style(row.get("change_pct", 0))
+    price = _style_text(_fmt_val("price", row.get("price")), style)
+    change_pct = _style_text(_fmt_val("change_pct", row.get("change_pct")), style)
     console.print(f"  [bold]{row.get('name', '')}[/bold]  {row.get('code', '')}", style="bold")
-    console.print(f"  最新价: [{style}]{_fmt_val('price', row.get('price'))}[/{style}]  涨跌幅: [{style}]{_fmt_val('change_pct', row.get('change_pct'))}[/{style}]")
+    console.print(f"  最新价: {price}  涨跌幅: {change_pct}")
     console.print(f"  今开: {_fmt_val('open', row.get('open'))}  最高: {_fmt_val('high', row.get('high'))}  最低: {_fmt_val('low', row.get('low'))}  昨收: {_fmt_val('pre_close', row.get('pre_close'))}")
     console.print(f"  成交量: {_fmt_val('volume', row.get('volume'))}  成交额: {_fmt_val('amount', row.get('amount'))}  换手率: {_fmt_val('turnover', row.get('turnover'))}")
     console.print(f"  PE: {_fmt_val('pe', row.get('pe'))}  PB: {_fmt_val('pb', row.get('pb'))}  总市值: {_fmt_val('total_mv', row.get('total_mv'))}")

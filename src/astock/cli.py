@@ -2,10 +2,48 @@
 
 from __future__ import annotations
 
-import click
+from pathlib import Path
 
-from .data import get_realtime_quotes, get_stock_quote, screener, rank_by, get_index_quote
-from .display import console, show_table, show_quote
+import click
+import pandas as pd
+
+from .data import DataFetchError, get_index_quote, get_stock_quote, rank_by, screener
+from .display import console, show_quote, show_table
+
+OutputFormat = click.Choice(["table", "json", "csv"])
+
+
+def _write_or_print(content: str, output: str | None):
+    if output:
+        Path(output).write_text(content, encoding="utf-8")
+        console.print(f"[green]已写入 {output}[/green]")
+    else:
+        click.echo(content)
+
+
+def _emit_dataframe(
+    df: pd.DataFrame,
+    fmt: str,
+    output: str | None,
+    title: str = "",
+    columns: list[str] | None = None,
+):
+    if fmt == "json":
+        _write_or_print(df.to_json(orient="records", force_ascii=False, indent=2), output)
+        return
+    if fmt == "csv":
+        _write_or_print(df.to_csv(index=False), output)
+        return
+    if output:
+        raise click.ClickException("--output only supports --format json or --format csv")
+    show_table(df, title=title, columns=columns)
+
+
+def _fetch_or_fail(func, *args, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except DataFetchError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @click.group()
@@ -17,27 +55,33 @@ def cli():
 
 @cli.command()
 @click.argument("code")
-def quote(code: str):
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def quote(code: str, fmt: str, output: str | None):
     """Show real-time quote for a stock.
 
     \b
     $ astock quote 000001
+    $ astock quote 000001 --format json
     """
     with console.status("获取行情数据..."):
-        df = get_realtime_quotes()
-    if df.empty:
-        console.print("[red]获取数据失败，请检查网络连接[/red]")
-        return
-    stock = df[df["code"] == code]
-    show_quote(code, stock)
+        stock = _fetch_or_fail(get_stock_quote, code)
+    if fmt == "table":
+        if output:
+            raise click.ClickException("--output only supports --format json or --format csv")
+        show_quote(code, stock)
+    else:
+        _emit_dataframe(stock, fmt, output)
 
 
 @cli.command()
-def index():
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def index(fmt: str, output: str | None):
     """Show major index quotes (上证、深证、创业板)."""
     with console.status("获取指数数据..."):
-        df = get_index_quote()
-    show_table(df, title="主要指数", columns=["code", "name", "price", "change_pct", "amount"])
+        df = _fetch_or_fail(get_index_quote)
+    _emit_dataframe(df, fmt, output, title="主要指数", columns=["code", "name", "price", "change_pct", "amount"])
 
 
 @cli.command()
@@ -51,38 +95,43 @@ def index():
 @click.option("--min-mv", type=float, help="最小总市值(元)")
 @click.option("--max-mv", type=float, help="最大总市值(元)")
 @click.option("-n", "--limit", type=int, default=20, help="返回数量 (默认 20)")
-def screen(**kwargs):
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def screen(fmt: str, output: str | None, **kwargs):
     """Screen stocks by financial metrics.
 
     \b
     $ astock screen --max-pe 30 --min-turnover 3 -n 10
+    $ astock screen --max-pe 30 --format csv --output stocks.csv
     """
     limit = kwargs.pop("limit", 20)
     with console.status("筛选中..."):
-        df = screener(limit=limit, **{k: v for k, v in kwargs.items() if v is not None})
-    show_table(df, title="筛选结果")
+        df = _fetch_or_fail(screener, limit=limit, **{k: v for k, v in kwargs.items() if v is not None})
+    _emit_dataframe(df, fmt, output, title="筛选结果")
 
 
 @cli.command()
 @click.argument("metric", type=click.Choice(["change_pct", "turnover", "pe", "pb", "total_mv", "amount", "volume"]))
 @click.option("--asc", "ascending", is_flag=True, help="升序排列 (默认降序)")
 @click.option("-n", "--limit", type=int, default=20, help="返回数量 (默认 20)")
-def top(metric: str, ascending: bool, limit: int):
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def top(metric: str, ascending: bool, limit: int, fmt: str, output: str | None):
     """Rank stocks by a metric.
 
     \b
     $ astock top change_pct          # 涨幅排行
     $ astock top pe --asc -n 10      # PE 最低 10 只
-    $ astock top total_mv            # 市值排行
+    $ astock top total_mv --format json
     """
     with console.status("排序中..."):
-        df = rank_by(metric=metric, ascending=ascending, limit=limit)
+        df = _fetch_or_fail(rank_by, metric=metric, ascending=ascending, limit=limit)
     metric_names = {
         "change_pct": "涨跌幅", "turnover": "换手率", "pe": "PE",
         "pb": "PB", "total_mv": "总市值", "amount": "成交额", "volume": "成交量",
     }
     direction = "升序" if ascending else "降序"
-    show_table(df, title=f"{metric_names.get(metric, metric)}排行 ({direction})")
+    _emit_dataframe(df, fmt, output, title=f"{metric_names.get(metric, metric)}排行 ({direction})")
 
 
 if __name__ == "__main__":

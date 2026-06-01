@@ -1,16 +1,16 @@
-.PHONY: install test lint clean
+.PHONY: install install-dev test lint clean
 
 install:
-	pip install -e .
+	python3 -m pip install -e .
 
 install-dev:
-	pip install -e ".[dev]"
+	python3 -m pip install -e ".[dev]"
 
 test:
-	python -m pytest tests/ -v
+	python3 -m pytest
 
 lint:
-	ruff check src/ tests/
+	python3 -m ruff check src tests
 
 clean:
-	rm -rf build/ dist/ *.egg-info src/*.egg-info
+	rm -rf build/ dist/ *.egg-info src/*.egg-info .pytest_cache .ruff_cache

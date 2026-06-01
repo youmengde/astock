@@ -18,6 +18,10 @@ classifiers = [
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
@@ -27,12 +31,26 @@ dependencies = [
     "pandas>=1.5",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1",
+]
+
 [project.scripts]
 astock = "astock.cli:cli"
 
 [project.urls]
 Homepage = "https://github.com/youmengde/astock"
 Repository = "https://github.com/youmengde/astock"
+Issues = "https://github.com/youmengde/astock/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
