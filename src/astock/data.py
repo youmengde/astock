@@ -136,6 +136,17 @@ def rank_by(metric: str = "change_pct", ascending: bool = False, limit: int = 20
     return ranked.sort_values(by=metric, ascending=ascending).head(limit)
 
 
+def search_stocks(keyword: str, limit: int = 20) -> pd.DataFrame:
+    """Search stocks by code prefix or name substring."""
+    df = get_realtime_quotes()
+    if df.empty or "code" not in df.columns or "name" not in df.columns:
+        return pd.DataFrame()
+    keyword = keyword.strip()
+    code_match = df["code"].astype(str).str.startswith(keyword)
+    name_match = df["name"].astype(str).str.contains(keyword, na=False)
+    return df[code_match | name_match].head(limit)
+
+
 # ── Index data ────────────────────────────────────────────────────
 
 def get_index_quote() -> pd.DataFrame:

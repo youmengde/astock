@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from astock import data
-from astock.data import DataFetchError, get_realtime_quotes, rank_by, screener
+from astock.data import DataFetchError, get_realtime_quotes, rank_by, screener, search_stocks
 
 
 @pytest.fixture(autouse=True)
@@ -56,3 +56,16 @@ def test_fetch_error_is_visible(monkeypatch):
 
     with pytest.raises(DataFetchError, match="boom"):
         get_realtime_quotes()
+
+
+def test_search_by_name_and_code(monkeypatch):
+    monkeypatch.setattr(data.ak, "stock_zh_a_spot_em", sample_quotes)
+
+    by_name = search_stocks("银行")
+    assert list(by_name["code"]) == ["000001"]
+
+    by_code = search_stocks("00000")
+    assert len(by_code) == 4
+
+    by_partial = search_stocks("万科")
+    assert list(by_partial["code"]) == ["000002"]
