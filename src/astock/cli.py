@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from .data import DataFetchError, get_index_quote, get_stock_quote, rank_by, screener, search_stocks
+from .data import DataFetchError, get_history, get_index_quote, get_stock_quote, rank_by, screener, search_stocks
 from .display import console, show_quote, show_table
 
 OutputFormat = click.Choice(["table", "json", "csv"])
@@ -150,6 +150,31 @@ def search(keyword: str, limit: int, fmt: str, output: str | None):
     with console.status("搜索中..."):
         df = _fetch_or_fail(search_stocks, keyword=keyword, limit=limit)
     _emit_dataframe(df, fmt, output, title=f"搜索: {keyword}")
+
+
+@cli.command()
+@click.argument("code")
+@click.option("--start", help="开始日期 YYYY-MM-DD (默认: 90 天前)")
+@click.option("--end", help="结束日期 YYYY-MM-DD (默认: 今日)")
+@click.option("--period", type=click.Choice(["daily", "weekly", "monthly"]), default="daily", help="K线周期")
+@click.option("--adjust", type=click.Choice(["qfq", "hfq", "none"]), default="qfq", help="复权方式")
+@click.option("-n", "--limit", type=int, default=30, help="返回最近 N 条 (表格模式)")
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def history(code: str, start: str | None, end: str | None, period: str, adjust: str, limit: int, fmt: str, output: str | None):
+    """Show historical OHLCV prices for a stock.
+
+    \b
+    $ astock history 000001
+    $ astock history 000001 --start 2024-01-01 --end 2024-12-31
+    $ astock history 000001 --start 2024-01-01 --format csv -o prices.csv
+    """
+    adjust_arg = "" if adjust == "none" else adjust
+    with console.status("获取历史行情..."):
+        df = _fetch_or_fail(get_history, code=code, start=start, end=end, period=period, adjust=adjust_arg)
+    if fmt == "table" and not df.empty:
+        df = df.tail(limit)
+    _emit_dataframe(df, fmt, output, title=f"{code} 历史行情 ({period})")
 
 
 if __name__ == "__main__":

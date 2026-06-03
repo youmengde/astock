@@ -147,6 +147,51 @@ def search_stocks(keyword: str, limit: int = 20) -> pd.DataFrame:
     return df[code_match | name_match].head(limit)
 
 
+def get_history(
+    code: str,
+    start: str | None = None,
+    end: str | None = None,
+    period: str = "daily",
+    adjust: str = "qfq",
+) -> pd.DataFrame:
+    """Fetch historical OHLCV price data for a stock.
+
+    Args:
+        code: 6-digit stock code (e.g. "000001").
+        start: Start date as YYYY-MM-DD (default: 90 days ago).
+        end: End date as YYYY-MM-DD (default: today).
+        period: "daily", "weekly", or "monthly".
+        adjust: "qfq" (前复权), "hfq" (后复权), or "" (no adjustment).
+    """
+    import datetime as _dt
+
+    if end is None:
+        end = _dt.date.today().strftime("%Y-%m-%d")
+    if start is None:
+        start = (_dt.date.today() - _dt.timedelta(days=90)).strftime("%Y-%m-%d")
+
+    start_compact = start.replace("-", "")
+    end_compact = end.replace("-", "")
+
+    df = _fetch_dataframe(
+        ak.stock_zh_a_hist,
+        symbol=str(code),
+        period=period,
+        start_date=start_compact,
+        end_date=end_compact,
+        adjust=adjust,
+    )
+    if df.empty:
+        return df
+    col_map = {
+        "日期": "date", "股票代码": "code", "开盘": "open",
+        "收盘": "close", "最高": "high", "最低": "low",
+        "成交量": "volume", "成交额": "amount", "振幅": "amplitude",
+        "涨跌幅": "change_pct", "涨跌额": "change", "换手率": "turnover",
+    }
+    return df.rename(columns=col_map)
+
+
 # ── Index data ────────────────────────────────────────────────────
 
 def get_index_quote() -> pd.DataFrame:

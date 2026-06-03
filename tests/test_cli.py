@@ -48,3 +48,35 @@ def test_data_error_is_click_error(monkeypatch):
 
     assert result.exit_code != 0
     assert "network down" in result.output
+
+
+def test_history_json(monkeypatch):
+    sample = pd.DataFrame([
+        {"date": "2024-01-02", "code": "000001", "open": 10.0, "close": 10.5, "high": 10.6, "low": 9.9, "volume": 1000, "change_pct": 5.0},
+    ])
+    monkeypatch.setattr(cli_module, "get_history", lambda **kwargs: sample)
+
+    result = CliRunner().invoke(cli, ["history", "000001", "--format", "json"])
+
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert data[0]["date"] == "2024-01-02"
+    assert data[0]["close"] == 10.5
+
+
+def test_history_forwards_options(monkeypatch):
+    captured = {}
+
+    def fake(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(cli_module, "get_history", fake)
+    result = CliRunner().invoke(cli, ["history", "000001", "--start", "2024-01-01", "--end", "2024-01-31", "--adjust", "none"])
+
+    assert result.exit_code == 0
+    assert captured["code"] == "000001"
+    assert captured["start"] == "2024-01-01"
+    assert captured["end"] == "2024-01-31"
+    # --adjust none should map to empty string for the data layer
+    assert captured["adjust"] == ""

@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from astock import data
-from astock.data import DataFetchError, get_realtime_quotes, rank_by, screener, search_stocks
+from astock.data import DataFetchError, get_history, get_realtime_quotes, rank_by, screener, search_stocks
 
 
 @pytest.fixture(autouse=True)
@@ -69,3 +69,50 @@ def test_search_by_name_and_code(monkeypatch):
 
     by_partial = search_stocks("万科")
     assert list(by_partial["code"]) == ["000002"]
+
+
+def sample_history():
+    return pd.DataFrame(
+        [
+            {"日期": "2024-01-02", "股票代码": "000001", "开盘": "10.0", "收盘": "10.5", "最高": "10.6", "最低": "9.9", "成交量": "1000", "涨跌幅": "5.0"},
+            {"日期": "2024-01-03", "股票代码": "000001", "开盘": "10.5", "收盘": "10.2", "最高": "10.7", "最低": "10.1", "成交量": "800", "涨跌幅": "-2.86"},
+        ]
+    )
+
+
+def test_get_history_renames_columns_and_forwards_args(monkeypatch):
+    captured = {}
+
+    def fake_hist(symbol, period, start_date, end_date, adjust):
+        captured.update(symbol=symbol, period=period, start_date=start_date, end_date=end_date, adjust=adjust)
+        return sample_history()
+
+    monkeypatch.setattr(data.ak, "stock_zh_a_hist", fake_hist)
+
+    df = get_history("000001", start="2024-01-01", end="2024-01-31", period="daily", adjust="qfq")
+
+    assert captured == {
+        "symbol": "000001",
+        "period": "daily",
+        "start_date": "20240101",
+        "end_date": "20240131",
+        "adjust": "qfq",
+    }
+    assert {"date", "open", "close", "high", "low", "volume", "change_pct"}.issubset(df.columns)
+    assert list(df["date"]) == ["2024-01-02", "2024-01-03"]
+
+
+def test_get_history_defaults_dates_when_omitted(monkeypatch):
+    captured = {}
+
+    def fake_hist(symbol, period, start_date, end_date, adjust):
+        captured.update(start_date=start_date, end_date=end_date)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(data.ak, "stock_zh_a_hist", fake_hist)
+
+    get_history("000001")
+
+    # Both should be 8-digit compact dates
+    assert len(captured["start_date"]) == 8 and captured["start_date"].isdigit()
+    assert len(captured["end_date"]) == 8 and captured["end_date"].isdigit()
