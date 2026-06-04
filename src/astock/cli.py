@@ -7,8 +7,9 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from .data import DataFetchError, get_history, get_index_quote, get_stock_quote, rank_by, screener, search_stocks
+from .data import DataFetchError, get_history, get_index_quote, get_realtime_quotes, get_stock_quote, rank_by, screener, search_stocks
 from .display import console, show_quote, show_table
+from .watchlist import add as wl_add, list_codes as wl_list, remove as wl_remove
 
 OutputFormat = click.Choice(["table", "json", "csv"])
 
@@ -175,6 +176,63 @@ def history(code: str, start: str | None, end: str | None, period: str, adjust: 
     if fmt == "table" and not df.empty:
         df = df.tail(limit)
     _emit_dataframe(df, fmt, output, title=f"{code} 历史行情 ({period})")
+
+
+@cli.group()
+def watch():
+    """Manage your watchlist (stored in ~/.astock/watchlist.json)."""
+    pass
+
+
+@watch.command("add")
+@click.argument("code")
+def watch_add(code: str):
+    """Add a stock code to the watchlist.
+
+    \b
+    $ astock watch add 000001
+    """
+    if wl_add(code):
+        console.print(f"[green]已添加 {code}[/green]")
+    else:
+        console.print(f"[yellow]{code} 已在自选列表中[/yellow]")
+
+
+@watch.command("remove")
+@click.argument("code")
+def watch_remove(code: str):
+    """Remove a stock code from the watchlist.
+
+    \b
+    $ astock watch remove 000001
+    """
+    if wl_remove(code):
+        console.print(f"[green]已移除 {code}[/green]")
+    else:
+        console.print(f"[yellow]{code} 不在自选列表中[/yellow]")
+
+
+@watch.command("list")
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def watch_list(fmt: str, output: str | None):
+    """Show quotes for all stocks in your watchlist.
+
+    \b
+    $ astock watch list
+    $ astock watch list --format json
+    """
+    codes = wl_list()
+    if not codes:
+        console.print("[yellow]自选列表为空。用 astock watch add 000001 添加[/yellow]")
+        return
+    with console.status("获取自选行情..."):
+        df = _fetch_or_fail(get_realtime_quotes)
+    if df.empty or "code" not in df.columns:
+        _emit_dataframe(df, fmt, output, title="自选股")
+        return
+    matched = df[df["code"].astype(str).isin(codes)]
+    _emit_dataframe(matched, fmt, output, title="自选股")
 
 
 if __name__ == "__main__":
