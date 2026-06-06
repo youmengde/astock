@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "astock"
-version = "0.1.0"
+version = "0.1.1"
 description = "A-share stock terminal toolkit — quotes, screening & ranking from the command line"
 readme = "README.md"
 license = {text = "MIT"}
