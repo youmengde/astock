@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added `astock sector list` and `astock sector top` for 申万 industry board quotes and ranking (#4).
+
 ## v0.1.1 — 2026-06-06
 
 - Added `astock search` to find stocks by name or code prefix.

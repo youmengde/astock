@@ -212,3 +212,45 @@ def get_index_quote() -> pd.DataFrame:
         return df
 
     return _cached("index_quote", load)
+
+
+# ── Sector / industry boards ──────────────────────────────────────
+
+_SECTOR_COL_MAP = {
+    "排名": "rank", "板块代码": "code", "板块名称": "name",
+    "最新价": "price", "涨跌额": "change", "涨跌幅": "change_pct",
+    "总市值": "total_mv", "换手率": "turnover",
+    "上涨家数": "up_count", "下跌家数": "down_count",
+    "领涨股票": "leader", "领涨股票-涨跌幅": "leader_change_pct",
+}
+
+
+def get_sector_quotes() -> pd.DataFrame:
+    """Get real-time quotes for all 申万 industry sectors / boards."""
+    def load() -> pd.DataFrame:
+        df = _fetch_dataframe(ak.stock_board_industry_name_em)
+        if df.empty:
+            return df
+        return df.rename(columns=_SECTOR_COL_MAP)
+
+    return _cached("sector_quotes", load)
+
+
+def rank_sectors(
+    metric: str = "change_pct",
+    ascending: bool = False,
+    limit: int = 20,
+) -> pd.DataFrame:
+    """Rank industry sectors by a given metric.
+
+    Supported metrics: change_pct, turnover, total_mv, up_count, down_count.
+    """
+    df = get_sector_quotes()
+    if df.empty or metric not in df.columns:
+        return pd.DataFrame()
+
+    values = _as_number(df, metric)
+    mask = values.notna()
+    ranked = df.loc[mask].copy()
+    ranked[metric] = values.loc[mask]
+    return ranked.sort_values(by=metric, ascending=ascending).head(limit)

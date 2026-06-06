@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from astock import data
-from astock.data import DataFetchError, get_history, get_realtime_quotes, rank_by, screener, search_stocks
+from astock.data import DataFetchError, get_history, get_realtime_quotes, get_sector_quotes, rank_by, rank_sectors, screener, search_stocks
 
 
 @pytest.fixture(autouse=True)
@@ -116,3 +116,58 @@ def test_get_history_defaults_dates_when_omitted(monkeypatch):
     # Both should be 8-digit compact dates
     assert len(captured["start_date"]) == 8 and captured["start_date"].isdigit()
     assert len(captured["end_date"]) == 8 and captured["end_date"].isdigit()
+
+
+def sample_sectors():
+    return pd.DataFrame(
+        [
+            {"板块代码": "BK01", "板块名称": "银行", "最新价": "1200.5", "涨跌幅": "2.3", "换手率": "0.5", "总市值": "5000000000", "上涨家数": "38", "下跌家数": "2", "领涨股票": "招商银行", "排名": "1"},
+            {"板块代码": "BK02", "板块名称": "房地产", "最新价": "800.2", "涨跌幅": "-1.5", "换手率": "2.0", "总市值": "2000000000", "上涨家数": "20", "下跌家数": "30", "领涨股票": "万科A", "排名": "2"},
+            {"板块代码": "BK03", "板块名称": "科技", "最新价": "1500.0", "涨跌幅": "5.0", "换手率": "4.5", "总市值": "8000000000", "上涨家数": "100", "下跌家数": "15", "领涨股票": "中兴通讯", "排名": "3"},
+        ]
+    )
+
+
+def test_get_sector_quotes_renames_columns(monkeypatch):
+    monkeypatch.setattr(data.ak, "stock_board_industry_name_em", sample_sectors)
+
+    df = get_sector_quotes()
+
+    assert {"code", "name", "price", "change_pct", "total_mv", "up_count", "down_count"}.issubset(df.columns)
+    assert list(df["code"]) == ["BK01", "BK02", "BK03"]
+
+
+def test_rank_sectors_by_change_pct(monkeypatch):
+    monkeypatch.setattr(data.ak, "stock_board_industry_name_em", sample_sectors)
+
+    df = rank_sectors("change_pct", ascending=False)
+
+    assert list(df["code"]) == ["BK03", "BK01", "BK02"]
+    df_asc = rank_sectors("change_pct", ascending=True)
+    assert list(df_asc["code"]) == ["BK02", "BK01", "BK03"]
+
+
+def test_rank_sectors_empty_on_missing_metric(monkeypatch):
+    monkeypatch.setattr(data.ak, "stock_board_industry_name_em", sample_sectors)
+
+    df = rank_sectors("nonexistent")
+    assert df.empty
+
+
+def test_get_sector_quotes_empty_on_fetch_empty(monkeypatch):
+    monkeypatch.setattr(data.ak, "stock_board_industry_name_em", lambda: pd.DataFrame())
+
+    df = get_sector_quotes()
+    assert df.empty
+
+
+def test_sector_help_in_cli(monkeypatch):
+    """Smoke-test that the sector command group is wired up."""
+    from click.testing import CliRunner
+    from astock.cli import cli
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["sector", "--help"])
+    assert result.exit_code == 0
+    assert "list" in result.output
+    assert "top" in result.output

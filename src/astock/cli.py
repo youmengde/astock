@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from .data import DataFetchError, get_history, get_index_quote, get_realtime_quotes, get_stock_quote, rank_by, screener, search_stocks
+from .data import DataFetchError, get_history, get_index_quote, get_realtime_quotes, get_sector_quotes, get_stock_quote, rank_by, rank_sectors, screener, search_stocks
 from .display import console, show_quote, show_table
 from .watchlist import add as wl_add, list_codes as wl_list, remove as wl_remove
 
@@ -176,6 +176,56 @@ def history(code: str, start: str | None, end: str | None, period: str, adjust: 
     if fmt == "table" and not df.empty:
         df = df.tail(limit)
     _emit_dataframe(df, fmt, output, title=f"{code} 历史行情 ({period})")
+
+
+@cli.group()
+def sector():
+    """Industry sector / board quotes (申万行业)."""
+    pass
+
+
+SECTOR_METRICS = click.Choice(["change_pct", "turnover", "total_mv", "up_count", "down_count"])
+
+
+@sector.command("list")
+@click.option("-n", "--limit", type=int, default=30, help="返回数量 (默认 30)")
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def sector_list(limit: int, fmt: str, output: str | None):
+    """List industry sectors with real-time quotes.
+
+    \b
+    $ astock sector list
+    $ astock sector list -n 10 --format csv
+    """
+    with console.status("获取板块行情..."):
+        df = _fetch_or_fail(get_sector_quotes)
+    if not df.empty:
+        df = df.head(limit)
+    _emit_dataframe(df, fmt, output, title="申万行业板块")
+
+
+@sector.command("top")
+@click.argument("metric", type=SECTOR_METRICS)
+@click.option("--asc", "ascending", is_flag=True, help="升序排列 (默认降序)")
+@click.option("-n", "--limit", type=int, default=20, help="返回数量 (默认 20)")
+@click.option("-f", "--format", "fmt", type=OutputFormat, default="table", help="输出格式")
+@click.option("-o", "--output", type=click.Path(dir_okay=False), help="写入文件(JSON/CSV)")
+def sector_top(metric: str, ascending: bool, limit: int, fmt: str, output: str | None):
+    """Rank sectors by a metric.
+
+    \b
+    $ astock sector top change_pct
+    $ astock sector top turnover --asc -n 10
+    """
+    with console.status("板块排序中..."):
+        df = _fetch_or_fail(rank_sectors, metric=metric, ascending=ascending, limit=limit)
+    metric_names = {
+        "change_pct": "涨跌幅", "turnover": "换手率", "total_mv": "总市值",
+        "up_count": "上涨家数", "down_count": "下跌家数",
+    }
+    direction = "升序" if ascending else "降序"
+    _emit_dataframe(df, fmt, output, title=f"板块{metric_names.get(metric, metric)}排行 ({direction})")
 
 
 @cli.group()
